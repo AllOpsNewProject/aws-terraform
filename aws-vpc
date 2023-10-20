@@ -1,0 +1,118 @@
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+    }
+  }
+}
+
+provider "aws" {
+    region = "ap-south-1"
+ 
+}
+
+# vpc creation
+
+resource "aws_vpc" "terraform-vpc" {
+  cidr_block       = "10.0.0.0/16"
+  instance_tenancy = "default"
+
+  tags = {
+    Name = "terraform-vpc"
+  }
+}
+
+# subnet (pub)
+
+resource "aws_subnet" "terraform-pub-sub" {
+  vpc_id     = aws_vpc.terraform-vpc.id
+  cidr_block = "10.0.1.0/24"
+
+  tags = {
+    Name = "terraform-pub-sub"
+  }
+}
+
+# subnet (pri)
+
+resource "aws_subnet" "terraform-pri-sub" {
+  vpc_id     = aws_vpc.terraform-vpc.id
+  cidr_block = "10.0.2.0/24"
+
+  tags = {
+    Name = "terraform-pri-sub"
+  }
+}
+
+# internet gw
+
+resource "aws_internet_gateway" "terraform-igw" {
+  vpc_id = aws_vpc.terraform-vpc.id
+
+  tags = {
+    Name = "terraform-igw"
+  }
+}
+
+#  route table
+
+resource "aws_route_table" "terraform-rt-pub" {
+  vpc_id = aws_vpc.terraform-vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.terraform-igw.id
+  }
+
+  tags = {
+    Name = "terraform-rt-pub"
+  }
+}
+
+
+# association
+
+resource "aws_route_table_association" "rt-asscociation" {
+  subnet_id      = aws_subnet.terraform-pub-sub.id
+  route_table_id = aws_route_table.terraform-rt-pub.id
+}
+
+
+# elastic ip
+
+resource "aws_eip" "terraform-eip" {
+}
+
+#nat
+
+resource "aws_nat_gateway" "terra-nat" {
+  allocation_id = aws_eip.terraform-eip.id
+  subnet_id     = aws_subnet.terraform-pub-sub.id
+
+
+  tags = {
+    Name = "terra-nat"
+  }
+}
+
+# route table
+
+resource "aws_route_table" "terraform-pri-routetable" {
+  vpc_id = aws_vpc.terraform-vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.terra-nat.id
+  }
+
+  tags = {
+    Name = "terraform-pri-routetable"
+  }
+}
+
+# association with pri-route
+
+resource "aws_route_table_association" "private-route" {
+  subnet_id      = aws_subnet.terraform-pri-sub.id
+  route_table_id = aws_route_table.terraform-pri-routetable.id
+}
